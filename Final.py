@@ -398,7 +398,7 @@ def open_application_module_2():
 
 
 root = tk.Tk()
-root.title("VJ's Application")
+root.title("LogSight-Defender")
 root.geometry("400x300")
 
 label = tk.Label(root, text="Select an Option to run:", font=("Arial", 17))
