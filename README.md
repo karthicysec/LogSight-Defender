@@ -42,5 +42,4 @@
 ## How It Works
 LogSight Defender analyzes log data from various sources, employing pattern recognition and anomaly detection to identify potential threats. The tool aggregates log events and correlates them with known security incidents, generating alerts for anomalies that deviate from normal behavior.
 
-## License
-This project is licensed for private use only. Unauthorized distribution or public sharing of this project is prohibited.
+
