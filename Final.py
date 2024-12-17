@@ -1,13 +1,14 @@
 import tkinter as tk
-from tkinter import filedialog, messagebox
-import win32evtlog
-import datetime
-from prettytable import PrettyTable
+from tkinter import font,filedialog, messagebox
 import os
 import winreg
-from datetime import datetime
+import win32evtlog
+import datetime
+from datetime import datetime, timedelta
+from prettytable import PrettyTable
 import wx
 import wx.adv
+
 
 
 def open_application_module_1():
@@ -219,9 +220,9 @@ def open_application_module_1():
 
 
     root = tk.Tk()
-    root.title("VJ's Event Log Analyzer")
+    root.title("VJ's Brute Force Detector...")
 
-    root.minsize(400, 300)
+    root.minsize(1000, 400)
     root.maxsize(1200, 800)
 
     frame = tk.Frame(root)
@@ -232,10 +233,10 @@ def open_application_module_1():
     frame.grid_columnconfigure(0, weight=1)
     frame.grid_columnconfigure(1, weight=1)
 
-    btn_open = tk.Button(frame, text="Open Event Log File", command=open_file)
+    btn_open = tk.Button(frame, text="Analyze Event Logs File", command=open_file)
     btn_open.grid(row=0, column=0, padx=5, pady=5)
 
-    btn_live = tk.Button(frame, text="Analyze Live Event Log", command=analyze_live_log)
+    btn_live = tk.Button(frame, text="Analyze Live Event Logs", command=analyze_live_log)
     btn_live.grid(row=0, column=1, padx=5, pady=5)
 
     output_text = tk.Text(frame, wrap=tk.WORD, width=100, height=30)
@@ -279,27 +280,35 @@ def open_application_module_2():
 
 
     def get_uninstalled_apps_on_date(selected_date):
-        uninstall_logs_path = r"C:\Windows\Logs\Uninstall"
-        apps_on_date = []
+        event_log_type = "Setup"
+        uninstalled_apps = []
 
-        if os.path.exists(uninstall_logs_path):
-            for log_file in os.listdir(uninstall_logs_path):
-                log_file_path = os.path.join(uninstall_logs_path, log_file)
-                if os.path.isfile(log_file_path):
-                    try:
-                        with open(log_file_path, 'r') as file:
-                            lines = file.readlines()
-                            for line in lines:
-                                if "Uninstall Date" in line:
-                                    uninstall_date_str = line.split(":")[1].strip()
-                                    uninstall_date = datetime.strptime(uninstall_date_str, "%Y-%m-%d").date()
-                                    if uninstall_date == selected_date:
-                                        apps_on_date.append(log_file.replace(".log", ""))  # Assuming log filename matches app name
-                    except Exception as e:
-                        continue
-        return apps_on_date
+        selected_date_start = datetime(selected_date.year, selected_date.month, selected_date.day)
+        selected_date_end = selected_date_start + timedelta(days=1)
 
+        try:
+            event_log_handle = win32evtlog.OpenEventLog("localhost", event_log_type)
+            event_read_flags = win32evtlog.EVENTLOG_BACKWARDS_READ | win32evtlog.EVENTLOG_SEQUENTIAL_READ
 
+            events = True
+            while events:
+                events = win32evtlog.ReadEventLog(event_log_handle, event_read_flags, 0)
+                for event in events:
+                    if event.EventID == 1034:
+                        try:
+                            event_generated_time = datetime.strptime(event.TimeGenerated.Format(), "%a %b %d %H:%M:%S %Y")
+                            if selected_date_start <= event_generated_time < selected_date_end:
+                                app_name = event.StringInserts[0] if event.StringInserts else "Unknown Application"
+                                uninstalled_apps.append(app_name)
+                        except Exception:
+                            continue
+
+            win32evtlog.CloseEventLog(event_log_handle)
+        except Exception:
+            pass
+
+        return uninstalled_apps
+    
     def file_access_history(directory, selected_date):
         accessed_files = []
         selected_date = datetime.strptime(selected_date, '%Y-%m-%d').date()
@@ -316,6 +325,7 @@ def open_application_module_2():
         return accessed_files
 
 
+
     class MainFrame(wx.Frame):
         def __init__(self, *args, **kw):
             super(MainFrame, self).__init__(*args, **kw)
@@ -324,7 +334,7 @@ def open_application_module_2():
             vbox = wx.BoxSizer(wx.VERTICAL)
 
             hbox_dir = wx.BoxSizer(wx.HORIZONTAL)
-            self.dir_picker = wx.DirPickerCtrl(panel, message="Select a folder")
+            self.dir_picker = wx.DirPickerCtrl(panel, message="Select a Folder")
             hbox_dir.Add(wx.StaticText(panel, label="Select a Folder or Directory:"), flag=wx.RIGHT, border=8)
             hbox_dir.Add(self.dir_picker, proportion=1)
             vbox.Add(hbox_dir, flag=wx.EXPAND | wx.ALL, border=10)
@@ -335,7 +345,7 @@ def open_application_module_2():
             hbox_date.Add(self.date_picker, proportion=1)
             vbox.Add(hbox_date, flag=wx.EXPAND | wx.ALL, border=10)
 
-            search_btn = wx.Button(panel, label="Find Files and Applications")
+            search_btn = wx.Button(panel, label="Analyze Files and Applications History")
             vbox.Add(search_btn, flag=wx.ALIGN_CENTER | wx.ALL, border=10)
             search_btn.Bind(wx.EVT_BUTTON, self.find_files_and_apps)
 
@@ -379,35 +389,56 @@ def open_application_module_2():
                     self.insert_colored_text(f"Files accessed on {selected_date}:\n", None, header_style, data_style, none_style, none_message=f"No files accessed on {selected_date}.")
 
             apps_installed = get_installed_apps_on_date(datetime.strptime(selected_date, '%Y-%m-%d').date())
+
             if apps_installed:
                 self.insert_colored_text(f"Applications installed on {selected_date}:\n", "\n".join(apps_installed), header_style, data_style, none_style, none_message="")
             else:
                 self.insert_colored_text(f"Applications installed on {selected_date}:\n", None, header_style, data_style, none_style, none_message=f"No applications installed on {selected_date}.")
 
             apps_uninstalled = get_uninstalled_apps_on_date(datetime.strptime(selected_date, '%Y-%m-%d').date())
+
             if apps_uninstalled:
                 self.insert_colored_text(f"Applications uninstalled on {selected_date}:\n", "\n".join(apps_uninstalled), header_style, data_style, none_style, none_message="")
             else:
                 self.insert_colored_text(f"Applications uninstalled on {selected_date}:\n", None, header_style, data_style, none_style, none_message=f"No applications uninstalled on {selected_date}.")
 
+
     if __name__ == "__main__":
         app = wx.App(False)
-        frame = MainFrame(None, title="File and Application History Analyzer")
+        frame = MainFrame(None, title="Files & Applications History Analyzer...")
         frame.Show()
         app.MainLoop()
 
 
+
 root = tk.Tk()
-root.title("LogSight-Defender")
-root.geometry("400x300")
+frame = tk.Frame(root)
+frame.pack()
 
-label = tk.Label(root, text="Select an Option to run:", font=("Arial", 17))
-label.pack(pady=20)
+root.title(" Brute Force Analyzer Tool")
+root.geometry("750x700")
 
-btn_app1 = tk.Button(root, text="Brute Force Event Analyzer", command=open_application_module_1, width=30, height=2)
+main_frame = tk.Frame(root)
+main_frame.pack(fill=tk.BOTH, expand=True)
+
+left_frame = tk.Frame(main_frame, width=250, bg="#D3D3D3")
+left_frame.pack(side=tk.LEFT, fill=tk.Y)
+left_frame.pack_propagate(False)
+
+right_frame = tk.Frame(main_frame)
+right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+
+label = tk.Label(left_frame, text="Select an Analyzer to Run:", font=("Helvetica", 15, "bold"))
+label.pack(pady=10)
+
+output_text = tk.Text(right_frame, wrap=tk.WORD, width=60, height=30, state=tk.DISABLED)
+output_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+btn_font = font.Font(family="Bookman Old Style", size=10, weight="bold")
+btn_app1 = tk.Button(left_frame, text="Brute Force Event Analyzer", command=open_application_module_1, width=28, height=2, font=btn_font)
 btn_app1.pack(pady=10)
 
-btn_app2 = tk.Button(root, text="Files and Application History Analyzer", command=open_application_module_2, width=30, height=2)
+btn_app2 = tk.Button(left_frame, text="Files & App's History Analyzer", command=open_application_module_2, width=28, height=2, font=btn_font)
 btn_app2.pack(pady=10)
 
 root.mainloop()
